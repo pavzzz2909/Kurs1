@@ -11,6 +11,7 @@ class YaUploader:
     def get_headers(self):
         return {
                 'Content-Type':'application/json',
+                'Accept': 'application/json',
                 'Authorization':'OAuth {}'.format(self.token)
         }
 
@@ -27,9 +28,37 @@ class YaUploader:
         files_url='https://cloud-api.yandex.net/v1/disk/resources/upload'
         headers = self.get_headers()
         params = self.get_params()
+        response = requests.post(url=files_url, headers=headers, params=params)
+        return response.status_code
+
+class Yafolder_files:
+    def __init__(self, token: str, path: str):
+        self.token = token
+        self.path = path
+
+    def get_headers(self):
+        return {
+                'Accept':'application/json',
+                'Authorization':'OAuth {}'.format(self.token)
+        }
+
+    def get_params(self):
+        return {
+                'path':self.path
+        }
+
+    def create(self):
+        '''
+        Метод загружает файл c url-адреса на яндекс диск
+        '''
+        files_url='https://cloud-api.yandex.net/v1/disk/resources'
+        headers = self.get_headers()
+        params = self.get_params()
         response = requests.get(url=files_url, headers=headers, params=params).json()
-        upload = requests.put(url=response['href'], params=params, headers=headers)
-        return upload.status_code
+        return response
+
+
+
 
 class Yafolder:
     def __init__(self, token: str, path: str):
@@ -66,21 +95,26 @@ def upload_Yandex(dict_urls,token):
         if result_create == 409:
             print('Папка уже ранее была создана')
         for key in dict_urls[dir]:
-            try:
+            res = {}
+            path = dir+'/'+dict_urls[dir][key]['filename']
+            file_path = dict_urls[dir][key]['url']
+            folder = path.split('/')[0]
+            in_files = Yafolder_files(token,path)
+            res = in_files.create()
+            print(res)
+            if 'error' in res.keys():
+                folder = Yafolder(token,folder)
+                upload = YaUploader(token,file_path,path)
                 in_json=[]
-                path = dir+'/'+dict_urls[dir][key]['filename']
-                file_path = dict_urls[dir][key]['url']
                 if 'size' in dict_urls[dir][key].keys():
                     size = dict_urls[dir][key]['size']
                 else:
                     size = 0
-                upload = YaUploader(token,file_path,path)
                 result = upload.upload_file(file_path,path)
-                if result == 201:
+                if result == 202:
                     print(f'Файл {dict_urls[dir][key]["filename"]} успешно загружен')
                 in_json = {'filename': dict_urls[dir][key]['filename'],"size":size}
                 json_file.append(in_json)
-            except:
+            else:
                 print(f'файл {dict_urls[dir][key]["filename"]} уже существует')
-                pass
         json.dump(json_file,open(filename,'w+'))
